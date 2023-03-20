@@ -1,4 +1,5 @@
 import numpy as np
+import gzip, struct
 from .autograd import Tensor
 
 from typing import Iterator, Optional, List, Sized, Union, Iterable, Any
@@ -24,7 +25,10 @@ class RandomFlipHorizontal(Transform):
         """
         flip_img = np.random.rand() < self.p
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if flip_img:
+            return np.fliplr(img)
+        else:
+            return img
         ### END YOUR SOLUTION
 
 
@@ -42,7 +46,9 @@ class RandomCrop(Transform):
         """
         shift_x, shift_y = np.random.randint(low=-self.padding, high=self.padding+1, size=2)
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        img_pad = np.pad(img, ((self.padding, self.padding), (self.padding, self.padding), (0, 0)), mode='constant')
+        H, W, _ = img.shape
+        return img_pad[shift_x + self.padding : H + shift_x + self.padding, shift_y + self.padding : W + shift_y + self.padding, :]
         ### END YOUR SOLUTION
 
 
@@ -101,13 +107,20 @@ class DataLoader:
 
     def __iter__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.shuffle:
+            self.ordering = np.array_split(np.random.permutation(len(self.dataset)),
+                                           range(self.batch_size, len(self.dataset), self.batch_size))
+        self.idx = -1
         ### END YOUR SOLUTION
         return self
 
     def __next__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.idx += 1
+        if self.idx >= len(self.ordering):
+            raise StopIteration
+        samples = [self.dataset[i] for i in self.ordering[self.idx]]
+        return [Tensor([samples[i][j] for i in range(len(samples))]) for j in range(len(samples[0]))]
         ### END YOUR SOLUTION
 
 
@@ -119,17 +132,38 @@ class MNISTDataset(Dataset):
         transforms: Optional[List] = None,
     ):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        with gzip.open(image_filename, 'rb') as img_file:
+            magic_number, num_examples, row, column = struct.unpack('>4I', img_file.read(16))
+            assert(magic_number == 2051)
+            input_dim = row * column
+            X = np.array(struct.unpack(str(input_dim * num_examples) + 'B', img_file.read()), dtype=np.float32).reshape(num_examples, input_dim)
+            X -= np.min(X)
+            X /= np.max(X)
+        with gzip.open(label_filename, 'rb') as label_file:
+            magic_number, num_items = struct.unpack('>2I', label_file.read(8))
+            assert(magic_number == 2049)
+            y = np.array(struct.unpack(str(num_items) + 'B', label_file.read()), dtype=np.uint8)
+        self.images = X
+        self.img_row = row
+        self.img_column = column
+        self.labels = y
+        self.transforms = transforms
         ### END YOUR SOLUTION
 
     def __getitem__(self, index) -> object:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        imgs = self.images[index]
+        labels = self.labels[index]
+        if len(imgs.shape) > 1:
+            imgs = np.array([self.apply_transforms(img.reshape(self.img_row, self.img_column, 1)).reshape(imgs[0].shape) for img in imgs])
+        else:
+            imgs = self.apply_transforms(imgs.reshape(self.img_row, self.img_column, 1)).reshape(imgs.shape)
+        return (imgs, labels)
         ### END YOUR SOLUTION
 
     def __len__(self) -> int:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return self.images.shape[0]
         ### END YOUR SOLUTION
 
 class NDArrayDataset(Dataset):
