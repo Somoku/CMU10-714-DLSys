@@ -24,7 +24,12 @@ class SGD(Optimizer):
 
     def step(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        for param in self.params:
+            if param not in self.u:
+                self.u[param] = float(0)
+            grad = ndl.Tensor((param.grad.data + self.weight_decay * param.data).cached_data, dtype="float32", device=param.device)
+            self.u[param] = self.momentum * self.u[param] + (1 - self.momentum) * grad
+            param.data = param.data + (-self.lr) * self.u[param]
         ### END YOUR SOLUTION
 
     def clip_grad_norm(self, max_norm=0.25):
@@ -61,5 +66,16 @@ class Adam(Optimizer):
 
     def step(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.t += 1
+        for param in self.params:
+            if param not in self.m:
+                self.m[param] = ndl.array_api.float32(0)
+            if param not in self.v:
+                self.v[param] = ndl.array_api.float32(0)
+            grad = ndl.Tensor((param.grad.data + self.weight_decay * param.data).cached_data, dtype="float32")
+            self.m[param] = self.beta1 * self.m[param] + (1 - self.beta1) * grad
+            self.v[param] = self.beta2 * self.v[param] + (1 - self.beta2) * (grad ** 2)
+            bias_m = self.m[param] / (1 - self.beta1 ** self.t)
+            bias_v = self.v[param] / (1 - self.beta2 ** self.t)
+            param.data = param.data + (-self.lr) * bias_m / (bias_v ** 0.5 + self.eps)
         ### END YOUR SOLUTION

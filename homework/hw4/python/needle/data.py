@@ -1,6 +1,7 @@
 import numpy as np
 from .autograd import Tensor
 import os
+import gzip, struct
 import pickle
 from typing import Iterator, Optional, List, Sized, Union, Iterable, Any
 from needle import backend_ndarray as nd
@@ -26,7 +27,10 @@ class RandomFlipHorizontal(Transform):
         """
         flip_img = np.random.rand() < self.p
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if flip_img:
+            return np.fliplr(img)
+        else:
+            return img
         ### END YOUR SOLUTION
 
 
@@ -46,7 +50,9 @@ class RandomCrop(Transform):
             low=-self.padding, high=self.padding + 1, size=2
         )
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        img_pad = np.pad(img, ((self.padding, self.padding), (self.padding, self.padding), (0, 0)), mode='constant')
+        H, W, _ = img.shape
+        return img_pad[shift_x + self.padding : H + shift_x + self.padding, shift_y + self.padding : W + shift_y + self.padding, :]
         ### END YOUR SOLUTION
 
 
@@ -106,13 +112,20 @@ class DataLoader:
 
     def __iter__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.shuffle:
+            self.ordering = np.array_split(np.random.permutation(len(self.dataset)),
+                                           range(self.batch_size, len(self.dataset), self.batch_size))
+        self.idx = -1
         ### END YOUR SOLUTION
         return self
 
     def __next__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.idx += 1
+        if self.idx >= len(self.ordering):
+            raise StopIteration
+        samples = [self.dataset[i] for i in self.ordering[self.idx]]
+        return [Tensor([samples[i][j] for i in range(len(samples))]) for j in range(len(samples[0]))]
         ### END YOUR SOLUTION
 
 
@@ -124,17 +137,38 @@ class MNISTDataset(Dataset):
         transforms: Optional[List] = None,
     ):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        with gzip.open(image_filename, 'rb') as img_file:
+            magic_number, num_examples, row, column = struct.unpack('>4I', img_file.read(16))
+            assert(magic_number == 2051)
+            input_dim = row * column
+            X = np.array(struct.unpack(str(input_dim * num_examples) + 'B', img_file.read()), dtype=np.float32).reshape(num_examples, input_dim)
+            X -= np.min(X)
+            X /= np.max(X)
+        with gzip.open(label_filename, 'rb') as label_file:
+            magic_number, num_items = struct.unpack('>2I', label_file.read(8))
+            assert(magic_number == 2049)
+            y = np.array(struct.unpack(str(num_items) + 'B', label_file.read()), dtype=np.uint8)
+        self.images = X
+        self.img_row = row
+        self.img_column = column
+        self.labels = y
+        self.transforms = transforms
         ### END YOUR SOLUTION
 
     def __getitem__(self, index) -> object:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        imgs = self.images[index]
+        labels = self.labels[index]
+        if len(imgs.shape) > 1:
+            imgs = np.array([self.apply_transforms(img.reshape(self.img_row, self.img_column, 1)).reshape(imgs[0].shape) for img in imgs])
+        else:
+            imgs = self.apply_transforms(imgs.reshape(self.img_row, self.img_column, 1)).reshape(imgs.shape)
+        return (imgs, labels)
         ### END YOUR SOLUTION
 
     def __len__(self) -> int:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return self.images.shape[0]
         ### END YOUR SOLUTION
 
 
@@ -156,7 +190,30 @@ class CIFAR10Dataset(Dataset):
         y - numpy array of labels
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        X = []
+        y = []
+        if train:
+            for i in range(1, 6):
+                file = f"{base_folder}/data_batch_{i}"
+                with open(file, 'rb') as fo:
+                    dict = pickle.load(fo, encoding='bytes')
+                    train_batch, train_labels = dict[b'data'].astype(float), dict[b'labels']
+                    X.append(train_batch)
+                    y.append(train_labels)
+        else:
+            file = f"{base_folder}/test_batch"
+            with open(file, 'rb') as fo:
+                dict = pickle.load(fo, encoding='bytes')
+                test_batch, test_labels = dict[b'data'].astype(float), dict[b'labels']
+                X.append(test_batch)
+                y.append(test_labels)
+        X = np.concatenate(X, axis=0)
+        y = np.concatenate(y, axis=None)
+        X = X / 255.0
+        X = np.reshape(X, (X.shape[0], 3, 32, 32))
+        self.images = X
+        self.labels = y
+        self.transforms = transforms
         ### END YOUR SOLUTION
 
     def __getitem__(self, index) -> object:
@@ -165,7 +222,14 @@ class CIFAR10Dataset(Dataset):
         Image should be of shape (3, 32, 32)
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        imgs = self.images[index]
+        labels = self.labels[index]
+        if self.transforms:
+            if len(imgs.shape) > 1:
+                imgs = np.array([self.apply_transforms(img) for img in imgs])
+            else:
+                imgs = self.apply_transforms(imgs)
+        return (imgs, labels)
         ### END YOUR SOLUTION
 
     def __len__(self) -> int:
@@ -173,7 +237,7 @@ class CIFAR10Dataset(Dataset):
         Returns the total number of examples in the dataset
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return self.images.shape[0]
         ### END YOUR SOLUTION
 
 
@@ -213,7 +277,12 @@ class Dictionary(object):
         Returns the word's unique ID.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if word in self.idx2word:
+            return self.word2idx[word]
+        else:
+            self.idx2word.append(word)
+            self.word2idx[word] = self.idx2word.index(word)
+            return self.word2idx[word]
         ### END YOUR SOLUTION
 
     def __len__(self):
@@ -221,7 +290,7 @@ class Dictionary(object):
         Returns the number of unique words in the dictionary.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return len(self.idx2word)
         ### END YOUR SOLUTION
 
 
@@ -248,7 +317,23 @@ class Corpus(object):
         ids: List of ids
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        with open(path, 'r') as f:
+            eos_id = self.dictionary.add_word("<eos>")
+            ids = []
+            if max_lines is None:
+                for line in f:
+                    words = line.split()
+                    for word in words:
+                        ids.append(self.dictionary.add_word(word))
+                    ids.append(eos_id)
+            else:
+                for _ in range(max_lines):
+                    line = f.readline()
+                    words = line.split()
+                    for word in words:
+                        ids.append(self.dictionary.add_word(word))
+                    ids.append(eos_id)
+            return ids
         ### END YOUR SOLUTION
 
 
@@ -269,7 +354,8 @@ def batchify(data, batch_size, device, dtype):
     Returns the data as a numpy array of shape (nbatch, batch_size).
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    nbatch = len(data) // batch_size
+    return np.array(data[:nbatch * batch_size]).reshape((nbatch, batch_size))
     ### END YOUR SOLUTION
 
 
@@ -293,5 +379,12 @@ def get_batch(batches, i, bptt, device=None, dtype=None):
     target - Tensor of shape (bptt*bs,) with cached data as NDArray
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    len = batches.shape[0]
+    if i + bptt + 1 >= len:
+        data = batches[i : len - 2, :]
+        target = batches[i + 1 : len - 1, :].flatten()
+    else:
+        data = batches[i : i + bptt, :]
+        target = batches[i + 1 : i + 1 + bptt, :].flatten()
+    return Tensor(data, device=device, dtype=dtype), Tensor(target, device=device, dtype=dtype)
     ### END YOUR SOLUTION

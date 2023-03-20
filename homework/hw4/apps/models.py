@@ -6,17 +6,36 @@ import math
 import numpy as np
 np.random.seed(0)
 
+def ConvBNBlock(in_channels, out_channels, kernel_size, stride, device=None):
+    if isinstance(kernel_size, tuple):
+        kernel_size = kernel_size[0]
+    if isinstance(stride, tuple):
+        stride = stride[0]
+    return nn.Sequential(nn.Conv(in_channels, out_channels, kernel_size, stride, device=device),
+                         nn.BatchNorm2d(out_channels, device=device),
+                         nn.ReLU())
 
 class ResNet9(ndl.nn.Module):
     def __init__(self, device=None, dtype="float32"):
         super().__init__()
         ### BEGIN YOUR SOLUTION ###
-        raise NotImplementedError() ###
+        self.model = nn.Sequential(ConvBNBlock(3, 16, 7, 4, device=device),
+                                   ConvBNBlock(16, 32, 3, 2, device=device),
+                                   nn.Residual(nn.Sequential(ConvBNBlock(32, 32, 3, 1, device=device),
+                                                             ConvBNBlock(32, 32, 3, 1, device=device))),
+                                   ConvBNBlock(32, 64, 3, 2, device=device),
+                                   ConvBNBlock(64, 128, 3, 2, device=device),
+                                   nn.Residual(nn.Sequential(ConvBNBlock(128, 128, 3, 1, device=device),
+                                                             ConvBNBlock(128, 128, 3, 1, device=device))),
+                                   nn.Flatten(),
+                                   nn.Linear(128, 128, device=device),
+                                   nn.ReLU(),
+                                   nn.Linear(128, 10, device=device))
         ### END YOUR SOLUTION
 
     def forward(self, x):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return self.model(x)
         ### END YOUR SOLUTION
 
 
@@ -35,7 +54,13 @@ class LanguageModel(nn.Module):
         """
         super(LanguageModel, self).__init__()
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.embedding_layer = nn.Embedding(output_size, embedding_size, device=device, dtype=dtype)
+        if seq_model == 'rnn':
+            self.seq_model = nn.RNN(embedding_size, hidden_size, num_layers, device=device, dtype=dtype)
+        elif seq_model == 'lstm':
+            self.seq_model = nn.LSTM(embedding_size, hidden_size, num_layers, device=device, dtype=dtype)
+        self.linear_layer = nn.Linear(hidden_size, output_size, device=device, dtype=dtype)
+        self.hidden_size = hidden_size
         ### END YOUR SOLUTION
 
     def forward(self, x, h=None):
@@ -52,7 +77,12 @@ class LanguageModel(nn.Module):
             else h is tuple of (h0, c0), each of shape (num_layers, bs, hidden_size)
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        print("x: ", x)
+        x_embed = self.embedding_layer(x)
+        print("x_embed: ", x_embed)
+        x_seq, h = self.seq_model(x_embed, h)
+        out = self.linear_layer(x_seq.reshape((np.prod(x.shape), self.hidden_size)))
+        return out, h
         ### END YOUR SOLUTION
 
 
