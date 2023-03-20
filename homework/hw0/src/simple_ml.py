@@ -20,7 +20,7 @@ def add(x, y):
         Sum of x + y
     """
     ### BEGIN YOUR CODE
-    pass
+    return x + y
     ### END YOUR CODE
 
 
@@ -48,7 +48,18 @@ def parse_mnist(image_filename, label_filename):
                 for MNIST will contain the values 0-9.
     """
     ### BEGIN YOUR CODE
-    pass
+    with gzip.open(image_filename, 'rb') as img_file:
+      magic_number, num_examples, row, column = struct.unpack('>4I', img_file.read(16))
+      assert(magic_number == 2051)
+      input_dim = row * column
+      X = np.array(struct.unpack(str(input_dim * num_examples) + 'B', img_file.read()), dtype=np.float32).reshape(num_examples, input_dim)
+      X -= np.min(X)
+      X /= np.max(X)
+    with gzip.open(label_filename, 'rb') as label_file:
+      magic_number, num_items = struct.unpack('>2I', label_file.read(8))
+      assert(magic_number == 2049)
+      y = np.array(struct.unpack(str(num_items) + 'B', label_file.read()), dtype=np.uint8)
+    return (X, y)
     ### END YOUR CODE
 
 
@@ -68,7 +79,7 @@ def softmax_loss(Z, y):
         Average softmax loss over the sample.
     """
     ### BEGIN YOUR CODE
-    pass
+    return np.mean(np.log(np.sum(np.exp(Z), axis=1)) - Z[np.arange(Z.shape[0]), y])
     ### END YOUR CODE
 
 
@@ -91,7 +102,14 @@ def softmax_regression_epoch(X, y, theta, lr = 0.1, batch=100):
         None
     """
     ### BEGIN YOUR CODE
-    pass
+    iterations = (y.size + batch - 1) // batch
+    for i in range(iterations):
+      X_batch = X[i * batch : (i + 1) * batch, :]
+      y_batch = y[i * batch : (i + 1) * batch]
+      Z_batch = np.exp(X_batch.dot(theta)) / np.sum(np.exp(X_batch.dot(theta)), axis=1)[:,None]
+      I_batch = np.eye(batch, theta.shape[1])[y_batch]
+      g_theta = X_batch.T.dot(Z_batch - I_batch) / batch
+      theta -= lr * g_theta
     ### END YOUR CODE
 
 
@@ -118,7 +136,18 @@ def nn_epoch(X, y, W1, W2, lr = 0.1, batch=100):
         None
     """
     ### BEGIN YOUR CODE
-    pass
+    iterations = (y.size + batch - 1) // batch
+    for i in range(iterations):
+        X_batch = X[i * batch : (i + 1) * batch, :]
+        y_batch = y[i * batch : (i + 1) * batch]
+        Z1 = np.maximum(0, X_batch.dot(W1))
+        I_batch = np.eye(batch, W2.shape[1])[y_batch]
+        G2 = np.exp(Z1.dot(W2)) / np.sum(np.exp(Z1.dot(W2)), axis=1)[:,None] - I_batch
+        G1 = (Z1 > 0) * (G2.dot(W2.T))
+        g_W1 = X_batch.T.dot(G1) / batch
+        g_W2 = Z1.T.dot(G2) / batch
+        W1 -= lr * g_W1
+        W2 -= lr * g_W2
     ### END YOUR CODE
 
 

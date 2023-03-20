@@ -33,7 +33,41 @@ void softmax_regression_epoch_cpp(const float *X, const unsigned char *y,
      */
 
     /// BEGIN YOUR CODE
-
+    size_t iterations = (m + batch - 1) / batch;
+    for (size_t iter = 0; iter < iterations; ++iter) {
+        size_t batch_loc = iter * batch;
+        size_t batch_size = fmin(batch, m - batch_loc);
+        // Z_batch computation
+        float *Z = new float[batch_size * k];
+        for (size_t i = 0; i < batch_size; ++i) {
+            for (size_t j = 0; j < k; ++j) {
+                float tmp = 0;
+                for (size_t t = 0; t < n; ++t) 
+                    tmp += X[batch_loc * n + i * n + t] * theta[t * k + j];
+                Z[i * k + j] = exp(tmp);
+            }
+        }
+        for (size_t i = 0; i < batch_size; ++i) {
+            float line_sum = 0;
+            for (size_t j = 0; j < k; ++j)
+                line_sum += Z[i * k + j];
+            for (size_t j = 0; j < k; ++j)
+                Z[i * k + j] /= line_sum;
+        }
+        // Z_batch - I_batch compuation
+        for (size_t i = 0; i < batch_size; ++i) 
+            Z[i * k + y[batch_loc + i]] -= 1;
+        // Gradient computation
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = 0; j < k; ++j) {
+                float tmp = 0;
+                for (size_t t = 0; t < batch_size; t++) 
+                    tmp += X[t * n + i + batch_loc * n] * Z[t * k + j];
+                theta[i * k + j] -= lr / batch * tmp;
+            }
+        }
+        delete[] Z;
+    }
     /// END YOUR CODE
 }
 
